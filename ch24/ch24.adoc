@@ -1,0 +1,56 @@
+== 24 Parser combinators
+=== 24.3 Understanding the parsing process
+WARNING: Well, somehow glued code. This works in GHCI but does not compile: `testParse'' oneStr`. Complains about `No instance for (Show a0) arising from a use of testParse''`
+[source]
+----
+include::ch24_24.3_1.hs[]
+----
+
+=== 24.4 Parsing fractions
+----
+include::ch24_24.4_1.hs[]
+----
+==== Exercise: Unit of Success
+Using `do` block helps. Somehow I wanted to use some cool fancy operator instead, but not sure is exists.
+----
+include::ch24_24.4_2.hs[]
+----
+
+=== 24.6 Alternative
+==== Exercise: Try Try
+CAUTION: The `badFraction` result is interesting. Not sure if it should be bad fraction or good decimal. The code as written righfuly so return decimal. Also I needed to use the fraction parser first, otherwise it would just return decimal.
+----
+include::ch24_24.6_1.hs[]
+----
+
+=== 24.7 Parsing configuration files
+----
+stack install trifecta
+stack install hspec
+stack install raw-strings-qq
+----
+
+----
+include::ch24_24.7_1.hs[]
+----
+
+=== 24.11 Chapter Exercises
+. `SemVer` will try to make it nicer. Monoids are cool.
++
+----
+include::ch24_24.11_1.hs[]
+----
+. parser for positive integer values
++
+----
+include::ch24_24.11_2.hs[]
+----
+. parser for positive and negative integer values
++
+CAUTION: clunky
++
+----
+include::ch24_24.11_3.hs[]
+----
+
+rest of the chapter not finished yet

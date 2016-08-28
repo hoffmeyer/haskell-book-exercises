@@ -603,6 +603,15 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_23_8_chapter_exercises">23.8 Chapter exercises</a></li>
 </ul>
 </li>
+<li><a href="#_24_parser_combinators">24 Parser combinators</a>
+<ul class="sectlevel2">
+<li><a href="#_24_3_understanding_the_parsing_process">24.3 Understanding the parsing process</a></li>
+<li><a href="#_24_4_parsing_fractions">24.4 Parsing fractions</a></li>
+<li><a href="#_24_6_alternative">24.6 Alternative</a></li>
+<li><a href="#_24_7_parsing_configuration_files">24.7 Parsing configuration files</a></li>
+<li><a href="#_24_11_chapter_exercises">24.11 Chapter Exercises</a></li>
+</ul>
+</li>
 </ul>
 </div>
 </div>
@@ -4593,6 +4602,8 @@ instance TooMany Goats where
   tooMany :: a -&gt; Bool
 
 newtype Goats = Goats (Int, Int) deriving Show
+
+1 = 0
 
 instance TooMany Goats where
   tooMany (Goats (n, n')) = (n + n') &gt; 42</code></pre>
@@ -9377,6 +9388,44 @@ main = do
 </div>
 </div>
 </li>
+<li>
+<p>and this a much better version, also now makes much more sense when I came back to it</p>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code class="language-haskell" data-lang="haskell">import Control.Monad (join)
+
+
+meh :: Monad m =&gt; [a] -&gt; (a -&gt; m b) -&gt; m [b]
+meh [] _ = pure []
+meh (x:xs) f = (:) &lt;$&gt; (f x) &lt;*&gt; (meh xs f)
+
+flipType :: (Monad m) =&gt; [m a] -&gt; m [a]
+flipType xs = meh xs id
+
+main = do
+  print $ flipType [Just 2, Just 5, Just 10]</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>I can just with <code>Applicative</code> and it works too. I did not use any monadic function here.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code class="language-haskell" data-lang="haskell">import Control.Monad (join)
+
+
+meh :: Applicative m =&gt; [a] -&gt; (a -&gt; m b) -&gt; m [b]
+meh [] _ = pure []
+meh (x:xs) f = (:) &lt;$&gt; (f x) &lt;*&gt; (meh xs f)
+
+flipType :: (Applicative m) =&gt; [m a] -&gt; m [a]
+flipType xs = meh xs id
+
+main = do
+  print $ flipType [Just 2, Just 5, Just 10]</code></pre>
+</div>
+</div>
+</li>
 </ol>
 </div>
 </div>
@@ -10848,10 +10897,577 @@ modify f = state $ \s -&gt; ((), f s)
 </div>
 </div>
 </div>
+<div class="sect1">
+<h2 id="_24_parser_combinators">24 Parser combinators</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_24_3_understanding_the_parsing_process">24.3 Understanding the parsing process</h3>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+Well, somehow glued code. This works in GHCI but does not compile: <code>testParse'' oneStr</code>. Complains about <code>No instance for (Show a0) arising from a use of testParse''</code>
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code class="language-haskell" data-lang="haskell">module LearnParsers where
+
+import Text.Trifecta
+
+stop :: Parser a
+stop = unexpected "stop"
+
+one = char '1' &gt;&gt; eof &gt;&gt; stop
+
+one' = one &gt;&gt; stop
+
+oneTwo = char '1' &gt;&gt; char '2' &gt;&gt; eof &gt;&gt; stop
+
+oneTwo' = oneTwo &gt;&gt; stop
+
+oneStr = string "1"  &gt;&gt; stop
+
+oneTwoStr = string "12"
+
+oneTwoThreeStr = string "123"
+
+oneTwoThreeChar = char '1' &gt;&gt; char '2' &gt;&gt; char '3'
+
+stringChar (x:xs) = char x &gt;&gt; stringChar xs
+stringChar [] = stop
+
+oneTwoThreeChar' = stringChar "123"
+
+testParse :: Parser Char -&gt; IO ()
+testParse p =
+  print $ parseString p mempty "123"
+
+testParse' :: Parser String -&gt; IO ()
+testParse' p =
+  print $ parseString p mempty "123"
+
+testParse'' :: Show a =&gt; Parser a -&gt; IO ()
+testParse'' p =
+  print $ parseString p mempty "123"
+
+pNL s =
+  putStrLn ('\n' : s)
+
+main = do
+  pNL "stop:"
+  testParse stop
+  pNL "one:"
+  testParse one
+  pNL "one':"
+  testParse one'
+  pNL "oneTwo:"
+  testParse oneTwo
+  pNL "oneTwo':"
+  testParse oneTwo'
+  pNL "oneStr':"
+  testParse' oneStr
+  pNL "oneTwoStr':"
+  testParse' oneTwoStr
+  pNL "oneTwoThreeStr':"
+  testParse'' oneTwoThreeStr
+  pNL "oneTwoThreeChar:"
+  testParse oneTwoThreeChar
+  pNL "oneTwoThreeChar':"
+  testParse oneTwoThreeChar'</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_24_4_parsing_fractions">24.4 Parsing fractions</h3>
+<div class="listingblock">
+<div class="content">
+<pre>{-# LANGUAGE OverloadedStrings #-}
+
+module Text.Fractions where
+import Control.Applicative
+import Data.Ratio ((%))
+import Text.Trifecta
+
+badFraction = "1/0"
+alsoBad = "10"
+shouldWork = "1/2"
+shouldAlsoWork = "2/1"
+
+parseFraction :: Parser Rational
+parseFraction = do
+  numerator &lt;- decimal
+  char '/'
+  denominator &lt;- decimal
+  return (numerator % denominator)
+
+virtuousFraction :: Parser Rational
+virtuousFraction = do
+  numerator &lt;- decimal
+  char '/'
+  denominator &lt;- decimal
+  case denominator of
+    0 -&gt; fail "Denominator cannot be zero"
+    _ -&gt; return (numerator % denominator)
+
+testVirtuous :: IO ()
+testVirtuous = do
+  print $ parseString virtuousFraction mempty badFraction
+  print $ parseString virtuousFraction mempty alsoBad
+  print $ parseString virtuousFraction mempty shouldWork
+  print $ parseString virtuousFraction mempty shouldAlsoWork
+
+main :: IO ()
+main = do
+  print $ parseString parseFraction mempty shouldWork
+  print $ parseString parseFraction mempty shouldAlsoWork
+  print $ parseString parseFraction mempty alsoBad
+  print $ parseString parseFraction mempty badFraction</pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_exercise_unit_of_success">Exercise: Unit of Success</h4>
+<div class="paragraph">
+<p>Using <code>do</code> block helps. Somehow I wanted to use some cool fancy operator instead, but not sure is exists.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>import Text.Trifecta
+
+parseReturnNumber :: Parser Integer
+parseReturnNumber = do
+  number &lt;- decimal
+  eof
+  return number
+
+main :: IO ()
+main = do
+  print $ parseString parseReturnNumber mempty "123"
+  print $ parseString parseReturnNumber mempty "123abc"</pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_24_6_alternative">24.6 Alternative</h3>
+<div class="sect3">
+<h4 id="_exercise_try_try">Exercise: Try Try</h4>
+<div class="admonitionblock caution">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-caution" title="Caution"></i>
+</td>
+<td class="content">
+The <code>badFraction</code> result is interesting. Not sure if it should be bad fraction or good decimal. The code as written righfuly so return decimal. Also I needed to use the fraction parser first, otherwise it would just return decimal.
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>{-# LANGUAGE OverloadedStrings #-}
+
+module Text.Fractions where
+import Control.Applicative
+import Data.Ratio ((%), Ratio(..))
+import Text.Trifecta
+
+badFraction = "1/0"
+alsoBad = "10"
+shouldWork = "1/2"
+shouldAlsoWork = "2/1"
+
+virtuousFraction :: Parser Rational
+virtuousFraction = do
+  numerator &lt;- decimal
+  char '/'
+  denominator &lt;- decimal
+  case denominator of
+    0 -&gt; fail "Denominator cannot be zero"
+    _ -&gt; return (numerator % denominator)
+
+type NumberOrFraction =
+  Either Integer (Ratio Integer)
+
+parseNR :: Parser NumberOrFraction
+parseNR =
+      (Right &lt;$&gt; try virtuousFraction)
+  &lt;|&gt; (Left &lt;$&gt; try integer)
+
+main :: IO ()
+main = do
+  print $ parseString parseNR mempty badFraction
+  print $ parseString parseNR mempty alsoBad
+  print $ parseString parseNR mempty shouldWork
+  print $ parseString parseNR mempty shouldAlsoWork</pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_24_7_parsing_configuration_files">24.7 Parsing configuration files</h3>
+<div class="listingblock">
+<div class="content">
+<pre>stack install trifecta
+stack install hspec
+stack install raw-strings-qq</pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+
+module Data.Ini where
+import Control.Applicative
+import Data.ByteString (ByteString)
+import Data.Char (isAlpha)
+import Data.Map (Map)
+import qualified Data.Map as M
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
+import Test.Hspec
+import Text.RawString.QQ
+-- parsers 0.12.3, trifecta 1.5.2
+import Text.Trifecta
+
+headerEx :: ByteString
+headerEx = "[blah]"
+
+-- "[blah]" -&gt; Section "blah"
+newtype Header =
+  Header String
+  deriving (Eq, Ord, Show)
+
+parseBracketPair :: Parser a -&gt; Parser a
+parseBracketPair p = char '[' *&gt; p &lt;* char ']'
+-- these operators mean the brackets will be
+-- parsed and then discarded
+-- but the p will remain as our result
+
+parseHeader :: Parser Header
+parseHeader =
+  parseBracketPair (Header &lt;$&gt; some letter)
+
+assignmentEx :: ByteString
+assignmentEx = "woot=1"
+
+type Name = String
+type Value = String
+type Assignments = Map Name Value
+
+parseAssignment :: Parser (Name, Value)
+parseAssignment = do
+  name &lt;- some letter
+  _ &lt;- char '='
+  val &lt;- some (noneOf "\n")
+  skipEOL -- important!
+  return (name, val)
+
+-- | Skip end of line and whitespace beyond.
+skipEOL :: Parser ()
+skipEOL = skipMany (oneOf "\n")
+
+commentEx :: ByteString
+commentEx = "; last modified 1 April 2001 by John Doe"
+
+commentEx' :: ByteString
+commentEx' = "; blah\n; woot\n \n;hah"
+
+-- | Skip comments starting at the beginning of the line.
+skipComments :: Parser ()
+skipComments =
+  skipMany (do _ &lt;- char ';' &lt;|&gt; char '#'
+               skipMany (noneOf "\n")
+               skipEOL)
+
+sectionEx :: ByteString
+sectionEx =
+  "; ignore me\n[states]\nChris=Texas"
+
+sectionEx' :: ByteString
+sectionEx' = [r|
+; ignore me
+[states]
+Chris=Texas
+|]
+
+sectionEx'' :: ByteString
+sectionEx'' = [r|
+; comment
+[section]
+host=wikipedia.org
+alias=claw
+[whatisit]
+red=intoothandclaw
+|]
+
+data Section =
+  Section Header Assignments
+  deriving (Eq, Show)
+
+newtype Config =
+  Config (Map Header Assignments)
+  deriving (Eq, Show)
+
+skipWhitespace :: Parser ()
+skipWhitespace =
+  skipMany (char ' ' &lt;|&gt; char '\n')
+
+parseSection :: Parser Section
+parseSection = do
+  skipWhitespace
+  skipComments
+  h &lt;- parseHeader
+  skipEOL
+  assignments &lt;- some parseAssignment
+  return $ Section h (M.fromList assignments)
+
+rollup :: Section
+  -&gt; Map Header Assignments
+  -&gt; Map Header Assignments
+
+rollup (Section h a) m =
+  M.insert h a m
+
+parseIni :: Parser Config
+parseIni = do
+  sections &lt;- some parseSection
+  let mapOfSections =
+        foldr rollup M.empty sections
+  return (Config mapOfSections)
+
+maybeSuccess :: Result a -&gt; Maybe a
+maybeSuccess (Success a) = Just a
+maybeSuccess _ = Nothing
+
+main :: IO ()
+main = hspec $ do
+  describe "Assignment Parsing" $
+    it "can parse a simple assignment" $ do
+      let m = parseByteString parseAssignment
+              mempty assignmentEx
+          r' = maybeSuccess m
+      print m
+      r' `shouldBe` Just ("woot", "1")
+  describe "Header Parsing" $
+    it "can parse a simple header" $ do
+      let m = parseByteString parseHeader mempty headerEx
+          r' = maybeSuccess m
+      print m
+      r' `shouldBe` Just (Header "blah")
+  describe "Comment parsing" $
+    it "Can skip a comment before a header" $ do
+      let p = skipComments &gt;&gt; parseHeader
+          i = "; woot\n[blah]"
+          m = parseByteString p mempty i
+          r' = maybeSuccess m
+      print m
+      r' `shouldBe` Just (Header "blah")
+  describe "Section parsing" $
+    it "Can parse a simple section" $ do
+      let m = parseByteString parseSection
+              mempty sectionEx
+          r' = maybeSuccess m
+          states = M.fromList [("Chris", "Texas")]
+          expected' = Just (Section
+                            (Header "states")
+                            states)
+      print m
+      r' `shouldBe` expected'
+  describe "INI parsing" $
+    it "Can parse multiple sections" $ do
+      let m = parseByteString parseIni mempty sectionEx''
+          r' = maybeSuccess m
+          sectionValues = M.fromList
+                          [ ("alias", "claw")
+                          , ("host", "wikipedia.org")]
+          whatisitValues = M.fromList
+                            [("red", "intoothandclaw")]
+          expected' = Just (Config
+                            (M.fromList
+                              [ (Header "section"
+                                , sectionValues)
+                              , (Header "whatisit"
+                                , whatisitValues)]))
+      print m
+      r' `shouldBe` expected'</pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_24_11_chapter_exercises">24.11 Chapter Exercises</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>SemVer</code> will try to make it nicer. Monoids are cool.</p>
+<div class="listingblock">
+<div class="content">
+<pre>import Control.Applicative ((&lt;|&gt;))
+import Data.Monoid ((&lt;&gt;))
+import Text.Trifecta
+
+
+-- Relevant to precedence/ordering,
+-- cannot sort numbers like strings.
+data NumberOrString =
+    NOSS String
+  | NOSI Integer
+  deriving Show
+
+instance Eq NumberOrString where
+  (==) (NOSI i) (NOSI i') = i == i'
+  (==) (NOSS s) (NOSS s') = s == s'
+  (==) _ _ = False
+
+instance Ord NumberOrString where
+  compare (NOSI i) (NOSI i') = compare i i'
+  compare (NOSS s) (NOSS s') = compare s s'
+  compare (NOSI _) _         = LT
+  compare _        (NOSI _)  = GT
+
+type Major = Integer
+type Minor = Integer
+type Patch = Integer
+type Release = [NumberOrString]
+type Metadata = [NumberOrString]
+
+data SemVer =
+  SemVer Major Minor Patch Release Metadata deriving Show
+
+instance Eq SemVer where
+  (==) (SemVer ma mi pa re me) (SemVer ma' mi' pa' re' me') =
+    ma == ma' &amp;&amp; mi == mi' &amp;&amp; pa == pa' &amp;&amp; re == re' &amp;&amp; me == me'
+
+instance Ord SemVer where
+  compare (SemVer ma mi pa re _) (SemVer ma' mi' pa' re' _) =
+    let c = (compare ma ma') &lt;&gt; (compare mi mi') &lt;&gt; (compare pa pa')
+    in case c of
+        EQ -&gt; compare re re'
+        _  -&gt; c
+
+nos :: Parser NumberOrString
+nos = do
+  (NOSI &lt;$&gt; decimal) &lt;|&gt; (NOSS &lt;$&gt; some letter)
+
+nosDot :: Parser NumberOrString
+nosDot = do
+  ns &lt;- nos
+  skipMany (oneOf ".")
+  return ns
+
+relP :: Parser [NumberOrString]
+relP = do
+  (char '-' &gt;&gt; many nosDot) &lt;|&gt; (return [])
+
+metP :: Parser [NumberOrString]
+metP = do
+  (char '+' &gt;&gt; many nosDot) &lt;|&gt; (return [])
+
+parseSemVer :: Parser SemVer
+parseSemVer = do
+  ma &lt;- decimal
+  char '.'
+  mi &lt;- decimal
+  char '.'
+  pa &lt;- decimal
+  rel &lt;- try relP
+  met &lt;- try metP
+  return $ SemVer ma mi pa rel met</pre>
+</div>
+</div>
+</li>
+<li>
+<p>parser for positive integer values</p>
+<div class="listingblock">
+<div class="content">
+<pre>import Text.Trifecta
+import Data.Char (digitToInt)
+
+parseDigit :: Parser Char
+parseDigit = oneOf "0123456789"
+
+joinNumber :: [Char] -&gt; Integer
+joinNumber = toInteger . foldl addThem 0
+  where addThem acc d = acc * 10 + digitToInt d
+
+base10Integer :: Parser Integer
+base10Integer = do
+  digits &lt;- some parseDigit
+  return (joinNumber digits)
+
+main = do
+  print $ parseString parseDigit mempty "123"
+  print $ parseString parseDigit mempty "abc"
+  print $ parseString base10Integer mempty "123abc"
+  print $ parseString base10Integer mempty "abc"</pre>
+</div>
+</div>
+</li>
+<li>
+<p>parser for positive and negative integer values</p>
+<div class="admonitionblock caution">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-caution" title="Caution"></i>
+</td>
+<td class="content">
+clunky
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>import Text.Trifecta
+import Data.Char (digitToInt)
+import Control.Applicative ((&lt;|&gt;))
+
+parseDigit :: Parser Char
+parseDigit = oneOf "0123456789"
+
+joinNumber :: [Char] -&gt; Integer
+joinNumber = toInteger . foldl addThem 0
+  where addThem acc d = acc * 10 + digitToInt d
+
+parseSign :: Parser Bool
+parseSign = try (char '-' &gt;&gt; return True) &lt;|&gt; return False
+
+base10Integer :: Parser Integer
+base10Integer = do
+  isNegative &lt;- parseSign
+  digits &lt;- some parseDigit
+  let n = joinNumber digits
+  return (if isNegative then (- n) else n)
+
+main = do
+  print $ parseString parseDigit mempty "123"
+  print $ parseString parseDigit mempty "abc"
+  print $ parseString base10Integer mempty "123abc"
+  print $ parseString base10Integer mempty "abc"
+  print $ parseString base10Integer mempty "-123abc"</pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>rest of the chapter not finished yet</p>
+</div>
+</div>
+</div>
+</div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2016-05-16 23:28:39 CEST
+Last updated 2016-05-18 18:58:14 IDT
 </div>
 </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.min.css">

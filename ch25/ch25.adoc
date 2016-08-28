@@ -1,0 +1,25 @@
+== 24 Composing types
+=== 24.3 Two little functors sittin’ in a tree, L-I-F-T-I-N-G
+[source]
+----
+include::ch25_25.3_1.hs[]
+----
+
+=== 24.4 Twinplicative
+----
+include::ch25_25.4_1.hs[]
+----
+
+=== 25.6 Exercises: Compose Instances
+==== Compose Foldable
+----
+include::ch25_25.6_1.hs[]
+----
+==== Compose Traversable
+----
+include::ch25_25.6_2.hs[]
+----
+==== And now for something completely different
+----
+include::ch25_25.6_3.hs[]
+----

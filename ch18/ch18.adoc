@@ -67,3 +67,15 @@ include::ch18_18.7_5.hs[]
 ----
 include::ch18_18.7_6.hs[]
 ----
+. and this a much better version, also now makes much more sense when I came back to it
++
+[source]
+----
+include::ch18_18.7_7.hs[]
+----
+. I can just with `Applicative` and it works too. I did not use any monadic function here.
++
+[source]
+----
+include::ch18_18.7_8.hs[]
+----
