@@ -3399,12 +3399,19 @@ main =
 <p>parametrized <code>myWords</code> and <code>myLines</code></p>
 <div class="listingblock">
 <div class="content">
-<pre class="prettyprint highlight"><code class="language-haskell" data-lang="haskell">separate :: [Char] -&gt; [[Char]]
-separate [] = []
+<pre class="prettyprint highlight"><code class="language-haskell" data-lang="haskell">separate :: Char -&gt; [Char] -&gt; [[Char]]
+separate _ [] = []
 separate sep xs = case dropWhile (== sep) xs of
                       [] -&gt; []
-                      az -&gt; w : myWords rest
+                      az -&gt; w : separate sep rest
                             where (w, rest) = break (== sep) az
+
+-- using purely takeWhile and dropWhile
+separate' :: Char -&gt; [Char] -&gt; [[Char]]
+separate' _ [] = []
+separate' sep xs = w : separate' sep ws
+  where w = takeWhile (/= sep) xs
+        ws = dropWhile (== sep) (drop (length w) xs)
 
 myWords :: [Char] -&gt; [[Char]]
 myWords = separate ' '
