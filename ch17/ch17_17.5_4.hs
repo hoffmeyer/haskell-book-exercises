@@ -8,4 +8,4 @@ y :: Maybe Integer
 y = lookup 2 $ zip xs ys
 
 summed :: Maybe Integer
-summed = sum <$> (,) x y
+summed = (pure sum <*>) $ (,) <$> x <*> y
